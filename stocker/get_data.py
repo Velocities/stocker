@@ -3,7 +3,6 @@ import yfinance as yf
 import requests
 import datetime as dt
 from pytrends.request import TrendReq
-import json
 
 
 def main(stock, years=1):  # function to get data from Yahoo Finance
@@ -15,21 +14,14 @@ def main(stock, years=1):  # function to get data from Yahoo Finance
 
 
 def company_name(stock):  # function to get the company's name from the stock
-    url = "http://d.yimg.com/autoc.finance.yahoo.com/autoc?query={}&region=1&lang=en".format(stock)  # source
-    try:
-        company = requests.get(url).json()['ResultSet']['Result'][0]['name']   # saving the name as 'company'
-    except json.decoder.JSONDecodeError:
-        return None
-
-    return company
+    url = f"http://d.yimg.com/autoc.finance.yahoo.com/autoc?query={stock}&region=1&lang=en"  # source
+    return (company := requests.get(url).json()['ResultSet']['Result'][0]['name'])   # saving the name as 'company'
 
 
 def get_interest(company, timeframe):  #  base function to get 'interest' from Google Trends
     pytrend = TrendReq()  # accessing to Google Trends using pytrends package
     pytrend.build_payload(kw_list=[company], timeframe=timeframe)  # finding interest for 'company' during 'timeframe'
-    result = pytrend.interest_over_time().drop('isPartial', axis=1)  # saving the 'interest' values
-
-    return result
+    return (result := pytrend.interest_over_time().drop('isPartial', axis=1))  # saving the 'interest' values
 
 
 def add_interest(df, company, years=1):  # main function to get 'interest' from Google Trends
@@ -46,10 +38,7 @@ def add_interest(df, company, years=1):  # main function to get 'interest' from 
 
     trends.rename(columns={company: 'Interest'}, inplace=True)  # changing title to 'Interest'
     trends.index.names = ['Date']
-    df = df.merge(trends, how='left', on='Date')  # Add Interest column from Google Trends API - pytrends
-    df.Interest.interpolate(inplace=True)  # interpolation for missing values
-
-    return df
+    return ((df := df.merge(trends, how='left', on='Date')).Interest.interpolate(inplace=True))  # Add Interest column from Google Trends API - pytrends and interpolation for missing values
 
 
 def add_wiki_views(df, company, start, end):  # function to get number of page views from Wikipedia
@@ -68,10 +57,7 @@ def add_wiki_views(df, company, start, end):  # function to get number of page v
     wiki_views.index.name = 'Date'
     wiki_views.index = pd.to_datetime(wiki_views.index)
 
-    df = df.merge(wiki_views, how='left', on='Date')  # Add Wiki_views column from Wikipedia API
-    df.Wiki_views.ffill(inplace=True)
-
-    return df
+    return ((df := df.merge(wiki_views, how='left', on='Date')).Wiki_views.ffill(inplace=True))  # Add Wiki_views column from Wikipedia API
 
 
 def add_rsi(df, period):    # function to Calculate RSI values
@@ -115,24 +101,20 @@ def add_r(df, period):  # Calculate Larry William indicator (%R)
 def total(stock, years=1, interest=False, wiki_views=False, indicators=False, period=14):
     # main function to combine data from Yahoo Finance, Google Trends, Wikipedia and calculated indicators.
     df, start, end = main(stock, years=years)  # get data from Yahoo Finance and define star and end
-    company = None
-    if interest or wiki_views:
-        company = company_name(stock)  # get the name of the company
+    company = company_name(stock)  # get the name of the company
 
-    if company is not None:
-        if interest:
-            df = add_interest(df, company, years=years)  # adding Interest from Google Trends.
-        if wiki_views:
-            df = add_wiki_views(df, company, start, end)  # adding Wiki Views
+    if interest:
+        df = add_interest(df, company, years=years)  # adding Interest from Google Trends.
+
+    if wiki_views:
+        df = add_wiki_views(df, company, start, end)  # adding Wiki Views
 
     if indicators:  # Adding indicators
         df = add_k(df, period)  # generating %K column.
         df = add_r(df, period)  # generating %R column.
         df = add_rsi(df, period)  # generating RSI column.
 
-    df = df.dropna()   # drop rows with missing data
-
-    return df
+    return (df := df.dropna())   # drop rows with missing data
 
 
 def correlation(stock, years=1, interest=False, wiki_views=False, indicators=False, period=14, complete=True, limit=0.5):
